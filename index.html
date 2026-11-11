@@ -674,7 +674,17 @@ function computeStats(list){
   const months = Object.keys(mm).sort();
   // 大额单笔
   const bigs = list.filter(t=>t.direction==='expense').sort((a,b)=>b.amount-a.amount).slice(0,5);
-  const days = list.length ? Math.max(1, Math.ceil((list[list.length-1].time - list[0].time)/86400000) + 1) : 1;
+  // 日均支出：单月取该月完整天数，全部时间取最早到最晚的跨度（用 min/max，不依赖排序）
+  let days = 1;
+  if(list.length){
+    if(currentMonthKey !== 'all' && currentRange){
+      days = currentRange.end.getDate(); // 该月自然天数（28~31）
+    } else {
+      let tMin = Infinity, tMax = -Infinity;
+      for(const t of list){ const ts = t.time; if(ts < tMin) tMin = ts; if(ts > tMax) tMax = ts; }
+      days = Math.max(1, Math.ceil((tMax - tMin)/86400000) + 1);
+    }
+  }
   return {income, expense, neutral, balance, savingsRate, cats, merchants, months, mm, bigs, count:list.length, days, avgDaily: expense/days};
 }
 
