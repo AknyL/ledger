@@ -245,7 +245,7 @@ tr:last-child td{border-bottom:none}
         <div id="adviceList"></div>
       </div>
       <div class="card">
-        <h3><span class="dot"></span>本月数据概览</h3>
+        <h3><span class="dot"></span>数据概览</h3>
         <div id="monthOverview"></div>
       </div>
     </div>
@@ -704,13 +704,13 @@ function generateAdvice(stats, monthLabel){
 
   // 储蓄率
   if(rate < 0){
-    list.push({level:'bad', t:'入不敷出 ⚠️', d:`本月支出 ${fmtMoney(totalExp)} 超过收入 ${fmtMoney(totalInc)}，结余为负。建议立即冻结非必要开支，优先保住房租/水电/饮食等刚性支出。`});
+    list.push({level:'bad', t:'入不敷出 ⚠️', d:`该区间支出 ${fmtMoney(totalExp)} 超过收入 ${fmtMoney(totalInc)}，结余为负。建议立即冻结非必要开支，优先保住房租/水电/饮食等刚性支出。`});
   } else if(rate < 0.15){
     list.push({level:'bad', t:'储蓄率偏低（'+(rate*100).toFixed(0)+'%）', d:'健康的储蓄率建议 ≥ 20%。可尝试“先存后花”：发工资当天先转出固定比例（如 20%）到独立账户，再规划剩余可花额度。'});
   } else if(rate < 0.3){
     list.push({level:'warn', t:'储蓄率一般（'+(rate*100).toFixed(0)+'%）', d:'已初步结余，但仍有优化空间。可从“餐饮”“购物”等弹性项目里找可压缩的部分。'});
   } else {
-    list.push({level:'good', t:'储蓄率健康（'+(rate*100).toFixed(0)+'%）👍', d:'本月收支结构良好，继续保持。可考虑把结余投向稳健理财，让钱生钱。'});
+    list.push({level:'good', t:'储蓄率健康（'+(rate*100).toFixed(0)+'%）👍', d:'收支结构良好，继续保持。可考虑把结余投向稳健理财，让钱生钱。'});
   }
 
   // 分类占比分析
@@ -1081,9 +1081,9 @@ function renderBudget(){
   $('#budgetTotal').value = totalBudget || '';
   if(totalBudget>0){
     const p = pct(spent, totalBudget);
-    $('#budgetTotalBar').innerHTML = progressHTML('本月已花', spent, totalBudget, p, spent>totalBudget);
+    $('#budgetTotalBar').innerHTML = progressHTML('已花', spent, totalBudget, p, spent>totalBudget);
   } else {
-    $('#budgetTotalBar').innerHTML = `<div class="muted" style="font-size:12px;margin-top:10px">未设置月总预算，本月支出 ${fmtMoney(spent)}</div>`;
+    $('#budgetTotalBar').innerHTML = `<div class="muted" style="font-size:12px;margin-top:10px">未设置月总预算，该月支出 ${fmtMoney(spent)}</div>`;
   }
   const cats = computeStats(list).cats;
   const names = [...new Set([...cats.map(c=>c.name), ...Object.keys(budget.byCat||{})])];
