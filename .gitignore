@@ -1,0 +1,11 @@
+# ===== 隐私保护：个人账单数据绝不提交到公开仓库 =====
+bills/
+ledger.json
+
+# Python 缓存
+__pycache__/
+*.pyc
+
+# 临时文件
+_check.js
+.DS_Store
