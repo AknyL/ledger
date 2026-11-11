@@ -1,11 +1,12 @@
-const CACHE = 'ledger-v2';
+const CACHE = 'ledger-v3';
 const ASSETS = [
   './',
   './index.html',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',
-  './icons/apple-touch-icon.png'
+  './icons/apple-touch-icon.png',
+  './xlsx.full.min.js'
 ];
 
 self.addEventListener('install', e => {
@@ -24,7 +25,18 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
-  // XLSX 解析库走网络（懒加载），其余走缓存优先
+  // 页面导航走网络优先，保证更新及时；离线时回退缓存
+  if (e.request.mode === 'navigate') {
+    e.respondWith(
+      fetch(e.request).then(res => {
+        const clone = res.clone();
+        caches.open(CACHE).then(c => c.put('./index.html', clone));
+        return res;
+      }).catch(() => caches.match('./index.html'))
+    );
+    return;
+  }
+  // 其余资源缓存优先
   e.respondWith(
     caches.match(e.request).then(hit =>
       hit || fetch(e.request).then(res => {
