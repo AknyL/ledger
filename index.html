@@ -254,7 +254,7 @@ tr:last-child td{border-bottom:none}
     <div id="tab-budget" class="hidden">
       <div class="card">
         <h3><span class="dot"></span>月总预算</h3>
-        <div class="muted" style="font-size:12px;margin-bottom:8px">目标月份：<b id="budgetMonth"></b>（跟随上方月份选择）</div>
+        <div class="muted" style="font-size:12px;margin-bottom:8px">统计范围：<b id="budgetMonth"></b>（跟随上方的月份 / 自定义区间）</div>
         <input type="number" id="budgetTotal" placeholder="输入月预算金额，如 8000" style="width:100%;font-size:16px;padding:10px;border:1px solid var(--line);border-radius:10px">
         <div id="budgetTotalBar"></div>
       </div>
@@ -1213,6 +1213,42 @@ function budgetTargetMonth(){
   if(currentMonthKey && currentMonthKey!=='all') return currentMonthKey;
   return monthKey(new Date());
 }
+
+/* 预算的统计范围：自定义区间优先，否则按所选月份 */
+function budgetScope(){
+  if(rangeMode==='custom' && customRange){
+    return {start: customRange.start, end: customRange.end,
+            label: `${fmtTime(customRange.start)} ~ ${fmtTime(customRange.end)}`,
+            prorated: true};
+  }
+  const mk = budgetTargetMonth();
+  const r = rangeOfMonth(mk);
+  const [y,m] = mk.split('-').map(Number);
+  return {start: r.start, end: r.end, label: `${y}年${m}月`, prorated: false};
+}
+
+/* 月预算按区间覆盖的自然日折算（跨月逐月按天数比例累加） */
+function prorateBudget(monthly, start, end){
+  if(!(monthly>0)) return 0;
+  const s = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  const e = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+  if(e < s) return 0;
+  let sum = 0;
+  let cur = new Date(s.getFullYear(), s.getMonth(), 1);
+  while(cur <= e){
+    const y = cur.getFullYear(), m = cur.getMonth();
+    const dim = new Date(y, m+1, 0).getDate();
+    const mStart = new Date(y, m, 1), mEnd = new Date(y, m, dim);
+    const ovStart = mStart > s ? mStart : s;
+    const ovEnd = mEnd < e ? mEnd : e;
+    if(ovStart <= ovEnd){
+      const days = Math.round((ovEnd - ovStart)/86400000) + 1;
+      sum += monthly * days / dim;
+    }
+    cur = new Date(y, m+1, 1);
+  }
+  return sum;
+}
 function progressHTML(label, spent, budgetVal, p, over){
   return `<div class="row-flex" style="margin-top:8px">
     <span style="font-size:12px;min-width:64px">${label} ${fmtMoney(spent)}</span>
@@ -1221,35 +1257,36 @@ function progressHTML(label, spent, budgetVal, p, over){
   </div>`;
 }
 function renderBudget(){
-  const mk = budgetTargetMonth();
-  const [y,m] = mk.split('-').map(Number);
-  $('#budgetMonth').textContent = `${y}年${m}月`;
-  const r = rangeOfMonth(mk);
-  const list = filterByRange(transactions, r.start, r.end);
+  const scope = budgetScope();
+  $('#budgetMonth').textContent = scope.label;
+  const list = filterByRange(transactions, scope.start, scope.end);
   const spent = sumBy(list,'expense');
   const totalBudget = +(budget.total||0);
   $('#budgetTotal').value = totalBudget || '';
-  if(totalBudget>0){
-    const p = pct(spent, totalBudget);
-    $('#budgetTotalBar').innerHTML = progressHTML('已花', spent, totalBudget, p, spent>totalBudget);
+  const allowance = scope.prorated ? prorateBudget(totalBudget, scope.start, scope.end) : totalBudget;
+  if(allowance>0){
+    const p = pct(spent, allowance);
+    $('#budgetTotalBar').innerHTML = progressHTML('已花', spent, allowance, p, spent>allowance)
+      + (scope.prorated ? `<div class="muted" style="font-size:11px;margin-top:6px">月预算 ${fmtMoney(totalBudget)}，按 ${spanDays(scope.start, scope.end)} 天折算为 ${fmtMoney(allowance)}</div>` : '');
   } else {
-    $('#budgetTotalBar').innerHTML = `<div class="muted" style="font-size:12px;margin-top:10px">未设置月总预算，该月支出 ${fmtMoney(spent)}</div>`;
+    $('#budgetTotalBar').innerHTML = `<div class="muted" style="font-size:12px;margin-top:10px">未设置月总预算，${scope.prorated?'该区间':'该月'}支出 ${fmtMoney(spent)}</div>`;
   }
   const cats = computeStats(list).cats;
   const names = [...new Set([...cats.map(c=>c.name), ...Object.keys(budget.byCat||{})])];
   $('#budgetCats').innerHTML = names.map(name=>{
     const spentAmt = (cats.find(c=>c.name===name)||{amount:0}).amount;
-    const b = +(budget.byCat||{})[name] || 0;
-    const has = b>0;
-    const p = has ? pct(spentAmt,b) : 0;
+    const b = +((budget.byCat||{})[name]||0);
+    const allow = scope.prorated ? prorateBudget(b, scope.start, scope.end) : b;
+    const has = allow>0;
+    const p = has ? pct(spentAmt, allow) : 0;
     return `<div style="margin-bottom:14px">
       <div class="row-flex" style="justify-content:space-between">
         <span>${esc(name)}</span>
         <input type="number" class="cat-budget-input" data-cat="${esc(name)}" placeholder="预算" value="${b||''}" style="width:120px;font-size:13px;padding:6px 8px;border:1px solid var(--line);border-radius:8px">
       </div>
-      ${has ? progressHTML('已花', spentAmt, b, p, spentAmt>b) : `<div class="muted" style="font-size:11px">已花 ${fmtMoney(spentAmt)}，未设预算</div>`}
+      ${has ? progressHTML('已花', spentAmt, allow, p, spentAmt>allow) : `<div class="muted" style="font-size:11px">已花 ${fmtMoney(spentAmt)}，未设预算</div>`}
     </div>`;
-  }).join('') || `<div class="muted" style="font-size:13px">该月暂无支出数据</div>`;
+  }).join('') || `<div class="muted" style="font-size:13px">${scope.prorated?'该区间':'该月'}暂无支出数据</div>`;
   renderCustomCats();
 }
 function renderCustomCats(){
