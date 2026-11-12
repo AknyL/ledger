@@ -1,4 +1,4 @@
-﻿const CACHE = 'ledger-v11';
+const CACHE = 'ledger-v11';
 const ASSETS = [
   './',
   './index.html',
@@ -25,7 +25,7 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
-  // 椤甸潰瀵艰埅璧扮綉缁滀紭鍏堬紝淇濊瘉鏇存柊鍙婃椂锛涚绾挎椂鍥為€€缂撳瓨
+  // 页面导航走网络优先，保证更新及时；离线时回退缓存
   if (e.request.mode === 'navigate') {
     e.respondWith(
       fetch(e.request).then(res => {
@@ -36,7 +36,7 @@ self.addEventListener('fetch', e => {
     );
     return;
   }
-  // 鍏朵綑璧勬簮缂撳瓨浼樺厛
+  // 其余资源缓存优先
   e.respondWith(
     caches.match(e.request).then(hit =>
       hit || fetch(e.request).then(res => {
