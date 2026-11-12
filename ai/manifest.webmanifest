@@ -1,0 +1,17 @@
+{
+  "name": "记账助手 AI（自用版）",
+  "short_name": "记账AI",
+  "description": "自用版：微信/支付宝账单自动分类，带 AI 消费分析",
+  "lang": "zh-CN",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f4f6fb",
+  "theme_color": "#4f6ef7",
+  "icons": [
+    { "src": "../icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "../icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "../icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
