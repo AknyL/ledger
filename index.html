@@ -313,8 +313,7 @@ body.theme-kitty .toolbar select,body.theme-kitty .toolbar input{border-color:#f
     <!-- 预算 -->
     <div id="tab-budget" class="hidden">
       <div class="card">
-        <h3><span class="dot"></span>月总预算</h3>
-        <div class="muted" style="font-size:12px;margin-bottom:8px">统计范围：<b id="budgetMonth"></b>（跟随上方的月份 / 自定义区间）</div>
+        <h3><span class="dot"></span>预算</h3>
         <input type="number" id="budgetTotal" placeholder="输入月预算金额，如 8000" style="width:100%;font-size:16px;padding:10px;border:1px solid var(--line);border-radius:10px">
         <div id="budgetRing" class="ring-wrap hidden"></div>
         <div id="budgetTotalBar"></div>
@@ -1023,7 +1022,7 @@ function renderHero(){
   }
   const scope = budgetScope();
   const total = +(budget.total||0);
-  const allowance = scope.prorated ? prorateBudget(total, scope.start, scope.end) : total;
+  const allowance = total;
   const dleft = scopeLeftDays(scope);
   const daysTxt = dleft>0 ? `${dleft} 天` : '已结束';
   if(!(total>0)){
@@ -1035,7 +1034,7 @@ function renderHero(){
     return;
   }
   const left = allowance - s.expense;
-  $('#heroSub').textContent = `预算 ${fmtMoney(allowance)}${scope.prorated?'（按月折算）':''} · 已用 ${pct(s.expense, allowance).toFixed(0)}%`;
+  $('#heroSub').textContent = `预算 ${fmtMoney(allowance)} · 已用 ${pct(s.expense, allowance).toFixed(0)}%`;
   let perDay = '—';
   if(dleft>0) perDay = left>0 ? fmtMoney(left/dleft) : '已超支';
   grid.innerHTML = `
@@ -1278,7 +1277,7 @@ function initEvents(){
     }
   });
   // 预算
-  $('#budgetTotal').addEventListener('change', e=>{ budget.total = parseFloat(e.target.value)||0; saveBudgetData(); renderBudget(); toast('已保存月总预算'); });
+  $('#budgetTotal').addEventListener('change', e=>{ budget.total = parseFloat(e.target.value)||0; saveBudgetData(); renderBudget(); renderHero(); toast('预算已保存'); });
   $('#budgetCats').addEventListener('change', e=>{
     if(e.target.classList.contains('cat-budget-input')){
       const n = e.target.dataset.cat; const v = parseFloat(e.target.value)||0;
@@ -1327,40 +1326,16 @@ function budgetTargetMonth(){
   return monthKey(new Date());
 }
 
-/* 预算的统计范围：自定义区间优先，否则按所选月份 */
+/* 预算的统计范围：跟随当前查看的月份 / 自定义区间 */
 function budgetScope(){
   if(rangeMode==='custom' && customRange){
     return {start: customRange.start, end: customRange.end,
-            label: `${fmtTime(customRange.start)} ~ ${fmtTime(customRange.end)}`,
-            prorated: true};
+            label: `${fmtTime(customRange.start)} ~ ${fmtTime(customRange.end)}`};
   }
   const mk = budgetTargetMonth();
   const r = rangeOfMonth(mk);
   const [y,m] = mk.split('-').map(Number);
-  return {start: r.start, end: r.end, label: `${y}年${m}月`, prorated: false};
-}
-
-/* 月预算按区间覆盖的自然日折算（跨月逐月按天数比例累加） */
-function prorateBudget(monthly, start, end){
-  if(!(monthly>0)) return 0;
-  const s = new Date(start.getFullYear(), start.getMonth(), start.getDate());
-  const e = new Date(end.getFullYear(), end.getMonth(), end.getDate());
-  if(e < s) return 0;
-  let sum = 0;
-  let cur = new Date(s.getFullYear(), s.getMonth(), 1);
-  while(cur <= e){
-    const y = cur.getFullYear(), m = cur.getMonth();
-    const dim = new Date(y, m+1, 0).getDate();
-    const mStart = new Date(y, m, 1), mEnd = new Date(y, m, dim);
-    const ovStart = mStart > s ? mStart : s;
-    const ovEnd = mEnd < e ? mEnd : e;
-    if(ovStart <= ovEnd){
-      const days = Math.round((ovEnd - ovStart)/86400000) + 1;
-      sum += monthly * days / dim;
-    }
-    cur = new Date(y, m+1, 1);
-  }
-  return sum;
+  return {start: r.start, end: r.end, label: `${y}年${m}月`};
 }
 function progressHTML(label, spent, budgetVal, p, over){
   return `<div class="row-flex" style="margin-top:8px">
@@ -1371,12 +1346,11 @@ function progressHTML(label, spent, budgetVal, p, over){
 }
 function renderBudget(){
   const scope = budgetScope();
-  $('#budgetMonth').textContent = scope.label;
   const list = filterByRange(transactions, scope.start, scope.end);
   const spent = sumBy(list,'expense');
   const totalBudget = +(budget.total||0);
   $('#budgetTotal').value = totalBudget || '';
-  const allowance = scope.prorated ? prorateBudget(totalBudget, scope.start, scope.end) : totalBudget;
+  const allowance = totalBudget;
   const ringBox = $('#budgetRing');
   if(allowance>0){
     const p = pct(spent, allowance);
@@ -1394,20 +1368,18 @@ function renderBudget(){
         <div class="ov-row"><span class="ov-k">剩余额度</span><span class="ov-v" style="color:${left<0?'var(--bad)':'var(--good)'}">${fmtMoney(left)}</span></div>
         <div class="ov-row"><span class="ov-k">预算</span><span class="ov-v">${fmtMoney(allowance)}</span></div>
       </div>`;
-    $('#budgetTotalBar').innerHTML = scope.prorated
-      ? `<div class="muted" style="font-size:11px;margin-top:8px">月预算 ${fmtMoney(totalBudget)}，按 ${spanDays(scope.start, scope.end)} 天折算为 ${fmtMoney(allowance)}</div>`
-      : '';
+    $('#budgetTotalBar').innerHTML = '';
   } else {
     ringBox.classList.add('hidden');
     ringBox.innerHTML = '';
-    $('#budgetTotalBar').innerHTML = `<div class="muted" style="font-size:12px;margin-top:10px">未设置月总预算，${scope.prorated?'该区间':'该月'}支出 ${fmtMoney(spent)}</div>`;
+    $('#budgetTotalBar').innerHTML = `<div class="muted" style="font-size:12px;margin-top:10px">未设置预算，当前支出 ${fmtMoney(spent)}</div>`;
   }
   const cats = computeStats(list).cats;
   const names = [...new Set([...cats.map(c=>c.name), ...Object.keys(budget.byCat||{})])];
   $('#budgetCats').innerHTML = names.map(name=>{
     const spentAmt = (cats.find(c=>c.name===name)||{amount:0}).amount;
     const b = +((budget.byCat||{})[name]||0);
-    const allow = scope.prorated ? prorateBudget(b, scope.start, scope.end) : b;
+    const allow = b;
     const has = allow>0;
     const p = has ? pct(spentAmt, allow) : 0;
     return `<div style="margin-bottom:14px">
@@ -1417,7 +1389,7 @@ function renderBudget(){
       </div>
       ${has ? progressHTML('已花', spentAmt, allow, p, spentAmt>allow) : `<div class="muted" style="font-size:11px">已花 ${fmtMoney(spentAmt)}，未设预算</div>`}
     </div>`;
-  }).join('') || `<div class="muted" style="font-size:13px">${scope.prorated?'该区间':'该月'}暂无支出数据</div>`;
+  }).join('') || `<div class="muted" style="font-size:13px">暂无支出数据</div>`;
   renderCustomCats();
 }
 function renderCustomCats(){
