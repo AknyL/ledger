@@ -86,6 +86,25 @@ tr:last-child td{border-bottom:none}
 .bar-fill{height:100%;border-radius:999px}
 .row-flex{display:flex;align-items:center;gap:10px}
 
+/* 总览顶部：大号支出 + 剩余每日可花 */
+.hero{background:linear-gradient(135deg,var(--brand),var(--brand2));border:none;color:#fff}
+.hero .hero-lab{font-size:12.5px;opacity:.92;overflow-wrap:anywhere}
+.hero .hero-num{font-size:clamp(30px,9vw,38px);font-weight:800;letter-spacing:-1.2px;margin:6px 0 2px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.hero .hero-sub{font-size:11.5px;opacity:.88;overflow-wrap:anywhere}
+.hero .hero-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:14px;background:rgba(255,255,255,.18);border-radius:14px;padding:10px}
+.hero .hg{min-width:0}
+.hero .hg span{display:block;font-size:10.5px;opacity:.9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hero .hg b{font-size:14px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+
+/* 预算圆环 */
+.ring-wrap{display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin-top:14px}
+.ring{width:116px;height:116px;border-radius:50%;flex:0 0 auto;display:flex;align-items:center;justify-content:center}
+.ring-in{width:90px;height:90px;border-radius:50%;background:var(--card);display:flex;flex-direction:column;align-items:center;justify-content:center}
+.ring-in b{font-size:21px;font-variant-numeric:tabular-nums;line-height:1.15}
+.ring-in span{font-size:10.5px;color:var(--sub)}
+.ring-side{flex:1 1 150px;min-width:0}
+.ring-side .ov-row{padding:7px 2px}
+
 /* 自定义时间区间 */
 .chip{background:var(--bg);border:1px solid var(--line);color:var(--ink);border-radius:999px;padding:6px 12px;font-size:12.5px;font-family:inherit;cursor:pointer}
 .chip:hover{border-color:var(--brand)}
@@ -247,6 +266,12 @@ body.theme-kitty .toolbar select,body.theme-kitty .toolbar input{border-color:#f
 
     <!-- 总览 -->
     <div id="tab-overview">
+      <div class="card hero">
+        <div class="hero-lab" id="heroLab">本月支出</div>
+        <div class="hero-num" id="heroExpense">—</div>
+        <div class="hero-sub" id="heroSub"></div>
+        <div class="hero-grid" id="heroGrid"></div>
+      </div>
       <div class="card">
         <h3><span class="dot"></span>月度收支趋势</h3>
         <div class="chart-box" id="trendChart"></div>
@@ -291,6 +316,7 @@ body.theme-kitty .toolbar select,body.theme-kitty .toolbar input{border-color:#f
         <h3><span class="dot"></span>月总预算</h3>
         <div class="muted" style="font-size:12px;margin-bottom:8px">统计范围：<b id="budgetMonth"></b>（跟随上方的月份 / 自定义区间）</div>
         <input type="number" id="budgetTotal" placeholder="输入月预算金额，如 8000" style="width:100%;font-size:16px;padding:10px;border:1px solid var(--line);border-radius:10px">
+        <div id="budgetRing" class="ring-wrap hidden"></div>
         <div id="budgetTotalBar"></div>
       </div>
       <div class="card">
@@ -849,6 +875,7 @@ function renderAll(){
   loadMonths();
   applyFilter();
   renderSummary();
+  renderHero();
   renderTrend();
   renderCategory();
   renderDetail();
@@ -902,7 +929,7 @@ function rangeLabel(){
 /* 自定义区间：查询 / 恢复 / 快捷选项 */
 function refreshAfterFilter(){
   applyFilter();
-  renderSummary(); renderTrend(); renderCategory(); renderDetail(); renderAdvice(); renderBudget();
+  renderSummary(); renderHero(); renderTrend(); renderCategory(); renderDetail(); renderAdvice(); renderBudget();
 }
 
 function setCustomRange(fromStr, toStr){
@@ -965,6 +992,56 @@ function renderSummary(){
   $('#kIncomeHint').textContent = `共 ${s.count} 笔记录`;
   $('#kExpenseHint').textContent = `日均支出 ${fmtMoney(s.avgDaily)}`;
   $('#kSavingsHint').textContent = s.savingsRate>=0.2 ? '健康水平（≥20%）' : '建议 ≥ 20%';
+}
+
+/* 距离区间结束还剩多少天（含今天；区间已结束返回 0） */
+function scopeLeftDays(scope){
+  const today = new Date(); today.setHours(0,0,0,0);
+  const endD = new Date(scope.end.getFullYear(), scope.end.getMonth(), scope.end.getDate());
+  const startD = new Date(scope.start.getFullYear(), scope.start.getMonth(), scope.start.getDate());
+  if(today > endD) return 0;
+  return spanDays(today > startD ? today : startD, endD);
+}
+
+/* 总览顶部大号支出 + 剩余每日可花 */
+function renderHero(){
+  const box = $('#heroExpense');
+  if(!box) return;
+  const s = computeStats(currentList());
+  const isAll = !(rangeMode==='custom' && customRange) && currentMonthKey==='all';
+  const lab = isAll ? '全部支出' : ((rangeMode==='custom' && customRange) ? '区间支出' : '本月支出');
+  $('#heroLab').textContent = `${lab} · ${rangeLabel()}`;
+  box.textContent = fmtMoney(s.expense);
+  const grid = $('#heroGrid');
+  if(isAll){
+    $('#heroSub').textContent = '切到具体月份，或用「📅 区间」选段时间，就能算「每天还能花多少」';
+    grid.innerHTML = `
+      <div class="hg"><span>日均支出</span><b>${fmtMoney(s.avgDaily)}</b></div>
+      <div class="hg"><span>记录笔数</span><b>${s.count} 笔</b></div>
+      <div class="hg"><span>储蓄率</span><b>${(s.savingsRate*100).toFixed(1)}%</b></div>`;
+    return;
+  }
+  const scope = budgetScope();
+  const total = +(budget.total||0);
+  const allowance = scope.prorated ? prorateBudget(total, scope.start, scope.end) : total;
+  const dleft = scopeLeftDays(scope);
+  const daysTxt = dleft>0 ? `${dleft} 天` : '已结束';
+  if(!(total>0)){
+    $('#heroSub').textContent = '还没设预算 — 去「预算」页填个月度预算，这里就显示每天还能花多少';
+    grid.innerHTML = `
+      <div class="hg"><span>剩余额度</span><b>—</b></div>
+      <div class="hg"><span>剩余天数</span><b>${daysTxt}</b></div>
+      <div class="hg"><span>每天还能花</span><b>—</b></div>`;
+    return;
+  }
+  const left = allowance - s.expense;
+  $('#heroSub').textContent = `预算 ${fmtMoney(allowance)}${scope.prorated?'（按月折算）':''} · 已用 ${pct(s.expense, allowance).toFixed(0)}%`;
+  let perDay = '—';
+  if(dleft>0) perDay = left>0 ? fmtMoney(left/dleft) : '已超支';
+  grid.innerHTML = `
+    <div class="hg"><span>剩余额度</span><b>${fmtMoney(left)}</b></div>
+    <div class="hg"><span>剩余天数</span><b>${daysTxt}</b></div>
+    <div class="hg"><span>每天还能花</span><b>${perDay}</b></div>`;
 }
 
 /* SVG 饼图 */
@@ -1300,11 +1377,29 @@ function renderBudget(){
   const totalBudget = +(budget.total||0);
   $('#budgetTotal').value = totalBudget || '';
   const allowance = scope.prorated ? prorateBudget(totalBudget, scope.start, scope.end) : totalBudget;
+  const ringBox = $('#budgetRing');
   if(allowance>0){
     const p = pct(spent, allowance);
-    $('#budgetTotalBar').innerHTML = progressHTML('已花', spent, allowance, p, spent>allowance)
-      + (scope.prorated ? `<div class="muted" style="font-size:11px;margin-top:6px">月预算 ${fmtMoney(totalBudget)}，按 ${spanDays(scope.start, scope.end)} 天折算为 ${fmtMoney(allowance)}</div>` : '');
+    const shown = Math.max(0, Math.min(100, p));
+    const over = spent>allowance;
+    const col = over ? 'var(--bad)' : 'var(--brand)';
+    const left = allowance - spent;
+    ringBox.classList.remove('hidden');
+    ringBox.innerHTML = `
+      <div class="ring" style="background:conic-gradient(${col} ${shown}%, var(--line) 0)">
+        <div class="ring-in"><b>${p.toFixed(0)}%</b><span>已花</span></div>
+      </div>
+      <div class="ring-side">
+        <div class="ov-row"><span class="ov-k">已花</span><span class="ov-v minus">${fmtMoney(spent)}</span></div>
+        <div class="ov-row"><span class="ov-k">剩余额度</span><span class="ov-v" style="color:${left<0?'var(--bad)':'var(--good)'}">${fmtMoney(left)}</span></div>
+        <div class="ov-row"><span class="ov-k">预算</span><span class="ov-v">${fmtMoney(allowance)}</span></div>
+      </div>`;
+    $('#budgetTotalBar').innerHTML = scope.prorated
+      ? `<div class="muted" style="font-size:11px;margin-top:8px">月预算 ${fmtMoney(totalBudget)}，按 ${spanDays(scope.start, scope.end)} 天折算为 ${fmtMoney(allowance)}</div>`
+      : '';
   } else {
+    ringBox.classList.add('hidden');
+    ringBox.innerHTML = '';
     $('#budgetTotalBar').innerHTML = `<div class="muted" style="font-size:12px;margin-top:10px">未设置月总预算，${scope.prorated?'该区间':'该月'}支出 ${fmtMoney(spent)}</div>`;
   }
   const cats = computeStats(list).cats;
