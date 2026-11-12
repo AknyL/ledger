@@ -487,6 +487,17 @@ function parseTime(s){
   if(s == null) return null;
   const t = String(s).trim();
   if(!t) return null;
+  // Excel 日期序列号（如 46335.5623…）：xlsx 的「交易时间」列常以序列号存储，直接 String() 会得到纯数字
+  if(/^\d{4,6}(?:\.\d+)?$/.test(t)){
+    const n = parseFloat(t);
+    if(n >= 20000 && n <= 80000){   // 1954~2119 年区间，避免把普通数字误判
+      const days = Math.floor(n), frac = n - days;
+      const d = new Date(1899, 11, 30);   // Excel 序列号原点（本地时间）
+      d.setDate(d.getDate() + days);
+      d.setSeconds(d.getSeconds() + Math.round(frac * 86400));
+      if(!isNaN(d.getTime())) return d;
+    }
+  }
   // 常见格式 2024-01-01 12:00:00 / 2024/1/1 12:00 / 20240101
   let m = t.match(/(\d{4})[-/](\d{1,2})[-/](\d{1,2})[ T]?(\d{1,2})?:?(\d{1,2})?:?(\d{1,2})?/);
   if(!m) return null;
@@ -541,6 +552,7 @@ async function handleFiles(fileList){
   renderAll();
   let msg = `导入完成：新增 ${results.added} 笔`;
   if(results.dup) msg += `，跳过重复 ${results.dup} 笔`;
+  if(!results.added && !results.total && !results.failed.length) msg += '；文件里没解析出任何交易，请确认是官方导出的账单明细';
   if(results.failed.length) msg += `；失败 ${results.failed.length} 个：${results.failed[0]}`;
   toast(msg, 6000);
   if(results.failed.length){ console.warn('导入失败明细', results.failed); }
