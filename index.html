@@ -1022,7 +1022,7 @@ function renderHero(){
   }
   const scope = budgetScope();
   const total = +(budget.total||0);
-  const allowance = total;
+  const allowance = scope.prorated ? prorateBudget(total, scope.start, scope.end) : total;
   const dleft = scopeLeftDays(scope);
   const daysTxt = dleft>0 ? `${dleft} 天` : '已结束';
   if(!(total>0)){
@@ -1034,7 +1034,7 @@ function renderHero(){
     return;
   }
   const left = allowance - s.expense;
-  $('#heroSub').textContent = `预算 ${fmtMoney(allowance)} · 已用 ${pct(s.expense, allowance).toFixed(0)}%`;
+  $('#heroSub').textContent = `预算 ${fmtMoney(allowance)}${scope.prorated?'（按月折算）':''} · 已用 ${pct(s.expense, allowance).toFixed(0)}%`;
   let perDay = '—';
   if(dleft>0) perDay = left>0 ? fmtMoney(left/dleft) : '已超支';
   grid.innerHTML = `
@@ -1326,16 +1326,50 @@ function budgetTargetMonth(){
   return monthKey(new Date());
 }
 
-/* 预算的统计范围：跟随当前查看的月份 / 自定义区间 */
+/* 判断区间是否正好是一个自然月（1 号到该月最后一天） */
+function isWholeMonthRange(start, end){
+  const s = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  const e = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+  if(s.getDate() !== 1) return false;
+  if(s.getFullYear() !== e.getFullYear() || s.getMonth() !== e.getMonth()) return false;
+  return e.getDate() === new Date(e.getFullYear(), e.getMonth()+1, 0).getDate();
+}
+
+/* 预算的统计范围：跟随当前查看的月份 / 自定义区间
+   整月视图不折算；跨月或不满整月的区间按月预算按天数折算 */
 function budgetScope(){
   if(rangeMode==='custom' && customRange){
     return {start: customRange.start, end: customRange.end,
-            label: `${fmtTime(customRange.start)} ~ ${fmtTime(customRange.end)}`};
+            label: `${fmtTime(customRange.start)} ~ ${fmtTime(customRange.end)}`,
+            prorated: !isWholeMonthRange(customRange.start, customRange.end)};
   }
   const mk = budgetTargetMonth();
   const r = rangeOfMonth(mk);
   const [y,m] = mk.split('-').map(Number);
-  return {start: r.start, end: r.end, label: `${y}年${m}月`};
+  return {start: r.start, end: r.end, label: `${y}年${m}月`, prorated: false};
+}
+
+/* 月预算按区间覆盖的自然日折算（跨月逐月按天数比例累加） */
+function prorateBudget(monthly, start, end){
+  if(!(monthly>0)) return 0;
+  const s = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  const e = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+  if(e < s) return 0;
+  let sum = 0;
+  let cur = new Date(s.getFullYear(), s.getMonth(), 1);
+  while(cur <= e){
+    const y = cur.getFullYear(), m = cur.getMonth();
+    const dim = new Date(y, m+1, 0).getDate();
+    const mStart = new Date(y, m, 1), mEnd = new Date(y, m, dim);
+    const ovStart = mStart > s ? mStart : s;
+    const ovEnd = mEnd < e ? mEnd : e;
+    if(ovStart <= ovEnd){
+      const days = Math.round((ovEnd - ovStart)/86400000) + 1;
+      sum += monthly * days / dim;
+    }
+    cur = new Date(y, m+1, 1);
+  }
+  return sum;
 }
 function progressHTML(label, spent, budgetVal, p, over){
   return `<div class="row-flex" style="margin-top:8px">
@@ -1350,7 +1384,7 @@ function renderBudget(){
   const spent = sumBy(list,'expense');
   const totalBudget = +(budget.total||0);
   $('#budgetTotal').value = totalBudget || '';
-  const allowance = totalBudget;
+  const allowance = scope.prorated ? prorateBudget(totalBudget, scope.start, scope.end) : totalBudget;
   const ringBox = $('#budgetRing');
   if(allowance>0){
     const p = pct(spent, allowance);
@@ -1368,7 +1402,11 @@ function renderBudget(){
         <div class="ov-row"><span class="ov-k">剩余额度</span><span class="ov-v" style="color:${left<0?'var(--bad)':'var(--good)'}">${fmtMoney(left)}</span></div>
         <div class="ov-row"><span class="ov-k">预算</span><span class="ov-v">${fmtMoney(allowance)}</span></div>
       </div>`;
-    $('#budgetTotalBar').innerHTML = '';
+    const mo = (scope.end.getFullYear()-scope.start.getFullYear())*12 + (scope.end.getMonth()-scope.start.getMonth()) + 1;
+    const wholeMonths = Math.abs(allowance - totalBudget*mo) < 0.01;
+    $('#budgetTotalBar').innerHTML = scope.prorated
+      ? `<div class="muted" style="font-size:11.5px;margin-top:8px">月预算 ${fmtMoney(totalBudget)}${wholeMonths?` × ${mo} 个月`:`，按 ${spanDays(scope.start, scope.end)} 天折算`} ≈ ${fmtMoney(allowance)}</div>`
+      : '';
   } else {
     ringBox.classList.add('hidden');
     ringBox.innerHTML = '';
@@ -1379,7 +1417,7 @@ function renderBudget(){
   $('#budgetCats').innerHTML = names.map(name=>{
     const spentAmt = (cats.find(c=>c.name===name)||{amount:0}).amount;
     const b = +((budget.byCat||{})[name]||0);
-    const allow = b;
+    const allow = scope.prorated ? prorateBudget(b, scope.start, scope.end) : b;
     const has = allow>0;
     const p = has ? pct(spentAmt, allow) : 0;
     return `<div style="margin-bottom:14px">
