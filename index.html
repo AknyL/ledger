@@ -34,7 +34,7 @@ header{position:sticky;top:0;z-index:20;background:linear-gradient(135deg,var(--
 header .row{max-width:680px;margin:0 auto;display:flex;align-items:center;gap:12px}
 header .logo{width:38px;height:38px;border-radius:10px;background:rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center;font-size:20px}
 header .title{font-size:17px;font-weight:700;letter-spacing:.5px}
-header .sub{font-size:11px;opacity:.85}
+header .sub{font-size:11px;opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 header .spacer{flex:1}
 .btn{display:inline-flex;align-items:center;gap:6px;border:none;cursor:pointer;border-radius:10px;
   font-size:14px;font-weight:600;padding:9px 14px;transition:transform .05s,opacity .15s;background:#fff;color:var(--brand)}
@@ -127,18 +127,53 @@ tr:last-child td{border-bottom:none}
 .modal h3{margin:0 0 14px;font-size:17px}
 .modal .btns{display:flex;gap:10px;margin-top:16px}
 .modal .btns .btn{flex:1;justify-content:center}
+/* ================= 粉色猫咪主题（body.theme-kitty） ================= */
+body.theme-kitty{
+  --bg:#fff6fa; --card:#fffdfe; --ink:#5b3f4c; --sub:#a8899a;
+  --brand:#ff7fae; --brand2:#ffa8c9; --good:#2fb27b; --bad:#f2557a;
+  --warn:#f2a33c; --line:#ffe5ef; --radius:22px;
+  --shadow:0 8px 24px rgba(255,120,170,.16);
+  background-color:#fff6fa;
+  background-image:radial-gradient(circle at 10% 6%, #ffeef6 0, transparent 42%), radial-gradient(circle at 90% 10%, #fff0f7 0, transparent 38%);
+  background-repeat:no-repeat;
+}
+body.theme-kitty header{background:linear-gradient(135deg,#ff9dc3,#ffbfdb 60%,#ffe2ee);color:#7d3f57;box-shadow:0 4px 18px rgba(255,140,180,.35)}
+body.theme-kitty header .sub{color:#a86383;opacity:1}
+body.theme-kitty header .title{color:#6f3549}
+body.theme-kitty header .logo{background:#fff;color:#ff7fae;border-radius:50% 50% 46% 46%;position:relative;box-shadow:0 2px 8px rgba(255,120,170,.3)}
+body.theme-kitty header .logo::before,
+body.theme-kitty header .logo::after{content:"";position:absolute;top:-6px;width:13px;height:13px;background:#fff;border-radius:50% 50% 0 0;box-shadow:0 2px 8px rgba(255,120,170,.22)}
+body.theme-kitty header .logo::before{left:1px;transform:rotate(-18deg)}
+body.theme-kitty header .logo::after{right:1px;transform:rotate(18deg)}
+body.theme-kitty .card{border:1px solid #ffe8f1}
+body.theme-kitty .card h3{color:#8a4d66}
+body.theme-kitty .card h3 .dot{background:#ffb3cf;box-shadow:0 0 0 3px #ffe8f1}
+body.theme-kitty .kpi{background:linear-gradient(180deg,#ffffff,#fff8fb);border:1px solid #ffe8f1}
+body.theme-kitty .kpi .lab{color:#a8899a}
+body.theme-kitty .seg{background:#ffeaf3}
+body.theme-kitty .seg button.on{background:#fff;color:#ff5f9e;box-shadow:0 2px 10px rgba(255,120,170,.25)}
+body.theme-kitty .btn{box-shadow:0 3px 10px rgba(255,120,170,.18)}
+body.theme-kitty .sug{border-left-color:#ff7fae;background:#fff3f8}
+body.theme-kitty .sug.warn{border-color:#f2a33c;background:#fff8ec}
+body.theme-kitty .sug.bad{border-color:#f2557a;background:#fff1f5}
+body.theme-kitty .chip{background:#fff;border-color:#ffd9e7;color:#a86383}
+body.theme-kitty .range-panel{border:1px solid #ffe8f1}
+body.theme-kitty .ov-row{border-bottom-color:#ffeef5}
+body.theme-kitty .tag{background:#ffeaf3;color:#a86383}
+body.theme-kitty .toolbar select,body.theme-kitty .toolbar input{border-color:#ffd9e7}
 </style>
 </head>
 <body>
 <header>
   <div class="row">
     <div class="logo">📒</div>
-    <div>
+    <div style="flex:1 1 auto;min-width:0">
       <div class="title">记账助手</div>
       <div class="sub">微信 / 支付宝账单 · 自动分类 · 消费分析</div>
     </div>
     <div class="spacer"></div>
-    <button class="btn primary small" id="btnImport">导入账单</button>
+    <button class="btn primary small" id="btnTheme" aria-label="切换主题" title="切换主题" style="padding:0;width:30px;height:30px;border-radius:50%;justify-content:center;font-size:14px;flex:0 0 auto">🎨</button>
+    <button class="btn primary small" id="btnImport" style="flex:0 0 auto">导入账单</button>
   </div>
 </header>
 
@@ -1120,6 +1155,7 @@ function mkSample(base, d, maxH, dir, type, merchant, amt){
 /* ================= 事件 ================= */
 function initEvents(){
   $('#btnImport').addEventListener('click', ()=>$('#fileInput').click());
+  $('#btnTheme').addEventListener('click', toggleTheme);
   $('#btnImport2').addEventListener('click', ()=>$('#fileInput').click());
   $('#fileInput').addEventListener('change', e=>{ handleFiles(e.target.files); e.target.value=''; });
   const dz = $('#dropZone');
@@ -1421,7 +1457,27 @@ function confirmOCR(){
   toast(`截图导入 ${added} 笔${dup?('，跳过重复 '+dup+' 笔'):''}`);
 }
 
+/* ================= 主题 ================= */
+const THEME_KEY = 'ledger_theme';
+function applyTheme(name){
+  const kitty = name === 'kitty';
+  document.body.classList.toggle('theme-kitty', kitty);
+  const m = document.querySelector('meta[name="theme-color"]');
+  if(m) m.setAttribute('content', kitty ? '#ff9dc3' : '#4f6ef7');
+  const logo = document.querySelector('header .logo');
+  if(logo) logo.textContent = kitty ? '🐱' : '📒';
+  const b = $('#btnTheme');
+  if(b) b.textContent = kitty ? '🎀' : '🎨';
+}
+function toggleTheme(){
+  const next = document.body.classList.contains('theme-kitty') ? 'clean' : 'kitty';
+  applyTheme(next);
+  localStorage.setItem(THEME_KEY, next);
+  toast(next === 'kitty' ? '已切换：粉色猫咪 🎀' : '已切换：清爽蓝');
+}
+
 /* ================= 启动 ================= */
+applyTheme(localStorage.getItem(THEME_KEY) || 'clean');
 load();
 initEvents();
 renderAll();
